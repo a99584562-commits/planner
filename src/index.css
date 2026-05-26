@@ -1,0 +1,33 @@
+*, *::before, *::after { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background: #0a0908;
+  color: #f5f1ea;
+  overscroll-behavior: none;
+}
+
+body {
+  font-family: 'Inter Tight', -apple-system, system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  min-height: 100dvh;
+}
+
+::-webkit-scrollbar { display: none; }
+* { scrollbar-width: none; }
+
+button {
+  -webkit-tap-highlight-color: transparent;
+  background: transparent;
+  border: none;
+  color: inherit;
+  font: inherit;
+  padding: 0;
+  cursor: pointer;
+}
+
+input, textarea {
+  font-family: inherit;
+}
