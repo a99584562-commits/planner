@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react'
 import { T } from '../tokens'
 import { Glass, Pill, Mono } from '../components'
 import { Icon } from '../icons'
-import { useStore, todayIso } from '../store'
+import { useStore, todayIso, hasEntryOn } from '../store'
 
 const MONTHS_RU = ['Январь','Февраль','Март','Апрель','Май','Июнь','Июль','Август','Сентябрь','Октябрь','Ноябрь','Декабрь']
 const MONTHS_EN = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC']
@@ -46,10 +46,14 @@ export function CalScreen() {
 
   const dotsByDay = useMemo(() => {
     const m: Record<number, number> = {}
+    const seen = new Set<string>()
     for (const h of habits) {
-      for (const d of h.history) {
-        if (d.startsWith(`${view.year}-${String(view.month + 1).padStart(2, '0')}`)) {
-          const day = Number(d.slice(8))
+      for (const e of h.entries) {
+        const key = `${h.id}|${e.date}`
+        if (seen.has(key)) continue
+        seen.add(key)
+        if (e.date.startsWith(`${view.year}-${String(view.month + 1).padStart(2, '0')}`)) {
+          const day = Number(e.date.slice(8))
           m[day] = (m[day] || 0) + 1
         }
       }
@@ -94,7 +98,7 @@ export function CalScreen() {
   }
 
   const tasksOnSelected = tasks.filter(t => !t.done).length // tasks are not date-bound yet
-  const habitsOnSelected = habits.reduce((a, h) => a + (h.history.includes(selectedIso) ? 1 : 0), 0)
+  const habitsOnSelected = habits.reduce((a, h) => a + (hasEntryOn(h, selectedIso) ? 1 : 0), 0)
 
   return (
     <div style={{ padding: '8px 20px 120px' }}>

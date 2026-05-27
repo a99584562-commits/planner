@@ -2,8 +2,11 @@ import { useEffect, useMemo, useState } from 'react'
 import { T } from '../tokens'
 import { Glass, Mono, SecHead, CheckCircle, Pill } from '../components'
 import { Icon } from '../icons'
-import { actions, useStore, streakOf, todayIso } from '../store'
+import { actions, useStore, streakOf, hasEntryOn, todayIso, type Habit } from '../store'
 import { AddTaskSheet } from '../components/AddTaskSheet'
+import { HabitTimerSheet } from '../components/HabitTimerSheet'
+import { HabitNoteSheet } from '../components/HabitNoteSheet'
+import { HabitActionButton } from './Habits'
 
 type Tab = 'today' | 'tasks' | 'board' | 'cal' | 'habits'
 
@@ -36,6 +39,8 @@ export function TodayScreen({ go }: { go: (t: Tab) => void }) {
   const habits = useStore(s => s.habits)
   const now = useNow()
   const [adding, setAdding] = useState(false)
+  const [timerFor, setTimerFor] = useState<Habit | null>(null)
+  const [noteFor, setNoteFor] = useState<Habit | null>(null)
 
   const today = todayIso()
   const dow = WEEKDAYS[now.getDay()]
@@ -43,7 +48,7 @@ export function TodayScreen({ go }: { go: (t: Tab) => void }) {
 
   const total = tasks.length
   const doneCount = tasks.filter(t => t.done).length
-  const habitDone = habits.filter(h => h.history.includes(today)).length
+  const habitDone = habits.filter(h => hasEntryOn(h, today)).length
   const bestActiveStreak = useMemo(
     () => habits.reduce((m, h) => Math.max(m, streakOf(h)), 0),
     [habits]
@@ -56,6 +61,9 @@ export function TodayScreen({ go }: { go: (t: Tab) => void }) {
       .slice(0, 3),
     [tasks]
   )
+
+  const activeTimerHabit = timerFor ? habits.find(h => h.id === timerFor.id) || null : null
+  const activeNoteHabit = noteFor ? habits.find(h => h.id === noteFor.id) || null : null
 
   return (
     <div style={{ padding: '8px 20px 120px' }}>
@@ -203,25 +211,32 @@ export function TodayScreen({ go }: { go: (t: Tab) => void }) {
           </div>
           <Glass pad={0} style={{ marginTop: 14, overflow: 'hidden' }}>
             {habits.slice(0, 3).map((h, i, arr) => {
-              const done = h.history.includes(today)
+              const done = hasEntryOn(h, today)
               return (
                 <div key={h.id} style={{
                   display: 'flex', alignItems: 'center', gap: 12,
                   padding: '13px 16px',
                   borderBottom: i < arr.length - 1 ? `0.5px solid ${T.hairline}` : 'none'
                 }}>
-                  <button onClick={() => actions.toggleHabitToday(h.id)} style={{ padding: 0, display: 'flex' }}>
-                    <CheckCircle done={done} />
-                  </button>
                   <div
-                    onClick={() => actions.toggleHabitToday(h.id)}
+                    onClick={() => go('habits')}
                     style={{
                       flex: 1, fontSize: 14, color: T.ink,
-                      textDecoration: done ? 'line-through' : 'none',
-                      opacity: done ? 0.5 : 1,
+                      opacity: done ? 0.6 : 1,
                       letterSpacing: -0.1, fontWeight: 500, cursor: 'pointer'
-                    }}>{h.name}</div>
-                  {h.target && <Mono size={9}>{h.target}</Mono>}
+                    }}>
+                    {h.name}
+                    {h.type !== 'check' && (
+                      <Mono size={8} style={{ marginLeft: 6, color: T.ink3 }}>
+                        · {h.type === 'timer' ? 'таймер' : 'заметка'}
+                      </Mono>
+                    )}
+                  </div>
+                  <HabitActionButton
+                    h={h}
+                    onOpenTimer={() => setTimerFor(h)}
+                    onOpenNote={() => setNoteFor(h)}
+                  />
                 </div>
               )
             })}
@@ -230,6 +245,8 @@ export function TodayScreen({ go }: { go: (t: Tab) => void }) {
       )}
 
       <AddTaskSheet open={adding} onClose={() => setAdding(false)} />
+      <HabitTimerSheet habit={activeTimerHabit} open={!!timerFor} onClose={() => setTimerFor(null)} />
+      <HabitNoteSheet habit={activeNoteHabit} open={!!noteFor} onClose={() => setNoteFor(null)} />
     </div>
   )
 }

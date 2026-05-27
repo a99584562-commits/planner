@@ -2,19 +2,48 @@ import { useEffect, useRef, useState } from 'react'
 import { T } from '../tokens'
 import { Mono } from '../components'
 import { Icon } from '../icons'
-import { actions, HUE_PALETTE, useStore, nextHue } from '../store'
+import { actions, HUE_PALETTE, useStore, nextHue, type HabitType } from '../store'
+
+const TYPES: { k: HabitType; label: string; sub: string }[] = [
+  { k: 'check', label: 'Галочка', sub: 'отметка о выполнении' },
+  { k: 'timer', label: 'Таймер',  sub: 'засекать время' },
+  { k: 'note',  label: 'Заметка', sub: 'фиксировать результат' }
+]
+
+function TypeIcon({ k, c = 'currentColor' }: { k: HabitType; c?: string }) {
+  if (k === 'check') return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="9" />
+      <path d="M8 12.5l3 3 5-6" />
+    </svg>
+  )
+  if (k === 'timer') return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="13" r="8" />
+      <path d="M12 9v4l2.5 2M9 3h6M12 5V3" />
+    </svg>
+  )
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M4 19l4-1 11-11-3-3L5 15l-1 4z" />
+      <path d="M14 6l3 3" />
+    </svg>
+  )
+}
 
 export function AddHabitSheet({ open, onClose }: { open: boolean; onClose: () => void }) {
   const habits = useStore(s => s.habits)
   const [name, setName] = useState('')
   const [target, setTarget] = useState('')
   const [hue, setHue] = useState<number>(nextHue(habits))
+  const [type, setType] = useState<HabitType>('check')
   const inputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     if (open) {
       setName('')
       setTarget('')
+      setType('check')
       setHue(nextHue(habits))
       const t = setTimeout(() => inputRef.current?.focus(), 350)
       return () => clearTimeout(t)
@@ -29,9 +58,14 @@ export function AddHabitSheet({ open, onClose }: { open: boolean; onClose: () =>
   }, [open, onClose])
 
   function submit() {
-    actions.addHabit({ name, target, hue })
+    actions.addHabit({ name, target, hue, type })
     onClose()
   }
+
+  const targetPlaceholder =
+    type === 'check' ? 'Цель — например ежедневно' :
+    type === 'timer' ? 'Цель — например 30 мин' :
+    'Цель — например главу в день'
 
   return (
     <>
@@ -94,7 +128,7 @@ export function AddHabitSheet({ open, onClose }: { open: boolean; onClose: () =>
             <input
               value={target}
               onChange={e => setTarget(e.target.value)}
-              placeholder="Цель — например 5 км, 30 мин, Anki"
+              placeholder={targetPlaceholder}
               autoComplete="off"
               autoCorrect="off"
               style={{
@@ -106,6 +140,36 @@ export function AddHabitSheet({ open, onClose }: { open: boolean; onClose: () =>
                 fontFamily: 'JetBrains Mono, monospace'
               }}
             />
+
+            <Mono style={{ display: 'block', marginTop: 16, marginBottom: 8 }}>как фиксируем</Mono>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              {TYPES.map(t => {
+                const a = t.k === type
+                return (
+                  <button key={t.k} onClick={() => setType(t.k)} style={{
+                    display: 'flex', alignItems: 'center', gap: 12,
+                    padding: '12px 14px', borderRadius: 14,
+                    background: a ? 'rgba(220,200,80,0.1)' : 'rgba(255,255,255,0.03)',
+                    border: '0.5px solid ' + (a ? 'rgba(220,200,80,0.4)' : 'rgba(255,255,255,0.07)'),
+                    textAlign: 'left', transition: 'all 0.2s'
+                  }}>
+                    <div style={{
+                      width: 32, height: 32, borderRadius: 10,
+                      background: a ? T.accent : 'rgba(255,255,255,0.06)',
+                      color: a ? T.accentInk : T.ink2,
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      flexShrink: 0
+                    }}>
+                      <TypeIcon k={t.k} />
+                    </div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 14, fontWeight: 600, color: T.ink, letterSpacing: -0.1 }}>{t.label}</div>
+                      <Mono style={{ display: 'block', marginTop: 2 }} size={9}>{t.sub}</Mono>
+                    </div>
+                  </button>
+                )
+              })}
+            </div>
 
             <Mono style={{ display: 'block', marginTop: 16, marginBottom: 8 }}>цвет</Mono>
             <div style={{ display: 'flex', gap: 8 }}>

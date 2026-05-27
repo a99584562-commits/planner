@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { T } from '../tokens'
 import { Glass, Photo, Pill, Mono, CheckCircle } from '../components'
 import { Icon } from '../icons'
-import { actions, useStore, streakOf, todayIso } from '../store'
+import { actions, useStore, streakOf, hasEntryOn, todayIso } from '../store'
 import { AddTaskSheet } from '../components/AddTaskSheet'
 
 const MONTHS_EN = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC']
@@ -44,7 +44,7 @@ export function BoardScreen() {
     [habits]
   )
 
-  const habitDotsCount = habits.filter(h => h.history.includes(today)).length
+  const habitDotsCount = habits.filter(h => hasEntryOn(h, today)).length
   const habitTotal = habits.length
 
   const hh = String(now.getHours()).padStart(2, '0')

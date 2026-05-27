@@ -2,26 +2,47 @@ import { useMemo, useState } from 'react'
 import { T } from '../tokens'
 import { Glass, Mono, SecHead, CheckCircle } from '../components'
 import { Icon } from '../icons'
-import { actions, useStore, streakOf, bestStreakOf, patternOf, todayIso, type Habit } from '../store'
+import {
+  actions,
+  useStore,
+  streakOf,
+  bestStreakOf,
+  patternOf,
+  timerTotalOn,
+  hasEntryOn,
+  lastNoteOf,
+  formatDurationRu,
+  todayIso,
+  type Habit
+} from '../store'
 import { AddHabitSheet } from '../components/AddHabitSheet'
+import { HabitTimerSheet } from '../components/HabitTimerSheet'
+import { HabitNoteSheet } from '../components/HabitNoteSheet'
+import { HabitDetailSheet } from '../components/HabitDetailSheet'
 
 export function HabitsScreen() {
   const habits = useStore(s => s.habits)
   const [adding, setAdding] = useState(false)
+  const [timerFor, setTimerFor] = useState<Habit | null>(null)
+  const [noteFor, setNoteFor] = useState<Habit | null>(null)
+  const [detailFor, setDetailFor] = useState<Habit | null>(null)
 
   const today = todayIso()
-  const doneToday = habits.filter(h => h.history.includes(today)).length
+  const doneToday = habits.filter(h => hasEntryOn(h, today)).length
   const best = useMemo(() => habits.reduce((m, h) => Math.max(m, bestStreakOf(h)), 0), [habits])
 
   const yearCounts = useMemo(() => {
     const counts = new Map<string, number>()
-    for (const h of habits) for (const d of h.history) counts.set(d, (counts.get(d) || 0) + 1)
+    for (const h of habits) for (const e of h.entries) counts.set(e.date, (counts.get(e.date) || 0) + 1)
     return counts
   }, [habits])
 
   const isEmpty = habits.length === 0
-
   const summaryTint = isEmpty ? 'rgba(36,30,26,0.32)' : 'rgba(60,42,30,0.5)'
+
+  const activeDetailHabit = detailFor ? habits.find(h => h.id === detailFor.id) || null : null
+  const activeTimerHabit = timerFor ? habits.find(h => h.id === timerFor.id) || null : null
+  const activeNoteHabit = noteFor ? habits.find(h => h.id === noteFor.id) || null : null
 
   return (
     <div style={{ padding: '8px 20px 120px' }}>
@@ -67,7 +88,7 @@ export function HabitsScreen() {
             Добавь свою первую привычку
           </div>
           <div style={{ marginTop: 6, fontSize: 12, color: T.ink3, lineHeight: 1.45 }}>
-            Отмечай каждый день — стрики начнут расти автоматически.
+            Галочка, таймер или текстовая заметка — выбери способ фиксации.
           </div>
           <button onClick={() => setAdding(true)} style={{
             marginTop: 16, display: 'inline-flex', alignItems: 'center', gap: 6,
@@ -87,7 +108,13 @@ export function HabitsScreen() {
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 14 }}>
             {habits.map(h => (
-              <HabitCard key={h.id} h={h} doneToday={h.history.includes(today)} />
+              <HabitCard
+                key={h.id}
+                h={h}
+                onOpenTimer={() => setTimerFor(h)}
+                onOpenNote={() => setNoteFor(h)}
+                onOpenDetail={() => setDetailFor(h)}
+              />
             ))}
 
             <button onClick={() => setAdding(true)} style={{
@@ -105,7 +132,7 @@ export function HabitsScreen() {
               </div>
               <div style={{ flex: 1 }}>
                 <div style={{ fontSize: 14, color: T.ink2, fontWeight: 500 }}>Новая привычка</div>
-                <Mono style={{ marginTop: 2, display: 'block' }} size={9}>отслеживай ежедневно</Mono>
+                <Mono style={{ marginTop: 2, display: 'block' }} size={9}>галочка · таймер · заметка</Mono>
               </div>
             </button>
           </div>
@@ -113,23 +140,61 @@ export function HabitsScreen() {
       )}
 
       <AddHabitSheet open={adding} onClose={() => setAdding(false)} />
+      <HabitTimerSheet habit={activeTimerHabit} open={!!timerFor} onClose={() => setTimerFor(null)} />
+      <HabitNoteSheet habit={activeNoteHabit} open={!!noteFor} onClose={() => setNoteFor(null)} />
+      <HabitDetailSheet habit={activeDetailHabit} open={!!detailFor} onClose={() => setDetailFor(null)} />
     </div>
   )
 }
 
-function HabitCard({ h, doneToday }: { h: Habit; doneToday: boolean }) {
+function HabitCard({
+  h, onOpenTimer, onOpenNote, onOpenDetail
+}: {
+  h: Habit
+  onOpenTimer: () => void
+  onOpenNote: () => void
+  onOpenDetail: () => void
+}) {
+  const today = todayIso()
+  const doneToday = hasEntryOn(h, today)
   const streak = streakOf(h)
   const pattern = patternOf(h, 13)
+
+  const subline: string | null = (() => {
+    if (h.type === 'timer') {
+      const sec = timerTotalOn(h, today)
+      if (sec > 0) return `сегодня · ${formatDurationRu(sec)}`
+      return h.target ? h.target : null
+    }
+    if (h.type === 'note') {
+      if (doneToday) {
+        const entries = h.entries
+          .filter(e => e.date === today && e.note)
+          .sort((a, b) => b.createdAt - a.createdAt)
+        const txt = entries[0]?.note || ''
+        return txt.length > 0 ? `«${txt.slice(0, 42)}${txt.length > 42 ? '…' : ''}»` : null
+      }
+      const last = lastNoteOf(h)
+      if (last) return `последняя · ${last.note!.slice(0, 36)}${last.note!.length > 36 ? '…' : ''}`
+      return h.target ? h.target : null
+    }
+    return h.target ? h.target : null
+  })()
+
   return (
     <Glass pad={0} style={{ padding: 14, display: 'flex', alignItems: 'center', gap: 14 }}>
-      <div style={{
+      <button onClick={onOpenDetail} style={{
         width: 44, height: 44, borderRadius: 14, flexShrink: 0,
         background: `linear-gradient(135deg, oklch(0.5 0.1 ${h.hue}), oklch(0.3 0.05 ${h.hue + 20}))`,
         border: '0.5px solid rgba(255,255,255,0.12)',
         display: 'flex', alignItems: 'center', justifyContent: 'center',
         fontFamily: 'JetBrains Mono, monospace', fontSize: 14, color: T.ink, fontWeight: 600
-      }}>{h.name[0]?.toUpperCase()}</div>
-      <div style={{ flex: 1, minWidth: 0 }}>
+      }}>{h.name[0]?.toUpperCase()}</button>
+
+      <div
+        onClick={onOpenDetail}
+        style={{ flex: 1, minWidth: 0, cursor: 'pointer' }}
+      >
         <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 8 }}>
           <div style={{
             fontSize: 15, fontWeight: 600, color: T.ink, letterSpacing: -0.2,
@@ -143,7 +208,16 @@ function HabitCard({ h, doneToday }: { h: Habit; doneToday: boolean }) {
             <Mono size={8}>дн</Mono>
           </div>
         </div>
-        {h.target && <Mono style={{ display: 'block', marginTop: 2 }} size={9}>{h.target}</Mono>}
+        {subline && (
+          <div style={{
+            marginTop: 2, fontSize: 11,
+            color: h.type === 'note' && doneToday ? T.ink2 : T.ink3,
+            fontFamily: h.type === 'note' ? 'Inter Tight, system-ui, sans-serif' : 'JetBrains Mono, monospace',
+            letterSpacing: h.type === 'note' ? -0.1 : 0.5,
+            textTransform: h.type === 'note' ? 'none' as const : 'uppercase' as const,
+            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap'
+          }}>{subline}</div>
+        )}
         <div style={{ display: 'flex', gap: 2.5, marginTop: 8 }}>
           {pattern.split('').map((c, j) => (
             <div key={j} style={{
@@ -153,9 +227,13 @@ function HabitCard({ h, doneToday }: { h: Habit; doneToday: boolean }) {
           ))}
         </div>
       </div>
-      <button onClick={() => actions.toggleHabitToday(h.id)} style={{ padding: 0, display: 'flex' }}>
-        <CheckCircle done={doneToday} />
-      </button>
+
+      <HabitActionButton
+        h={h}
+        onOpenTimer={onOpenTimer}
+        onOpenNote={onOpenNote}
+      />
+
       <button
         onClick={() => actions.deleteHabit(h.id)}
         aria-label="Удалить"
@@ -166,6 +244,65 @@ function HabitCard({ h, doneToday }: { h: Habit; doneToday: boolean }) {
         </svg>
       </button>
     </Glass>
+  )
+}
+
+export function HabitActionButton({
+  h, onOpenTimer, onOpenNote
+}: {
+  h: Habit
+  onOpenTimer: () => void
+  onOpenNote: () => void
+}) {
+  const today = todayIso()
+  const doneToday = hasEntryOn(h, today)
+
+  if (h.type === 'check') {
+    return (
+      <button onClick={() => actions.toggleCheckToday(h.id)} style={{ padding: 0, display: 'flex' }}>
+        <CheckCircle done={doneToday} />
+      </button>
+    )
+  }
+
+  if (h.type === 'timer') {
+    const sec = timerTotalOn(h, today)
+    return (
+      <button onClick={onOpenTimer} style={{
+        display: 'inline-flex', alignItems: 'center', gap: 5,
+        padding: '0 10px', height: 32, borderRadius: 999,
+        background: doneToday ? 'rgba(220,200,80,0.15)' : 'rgba(255,255,255,0.05)',
+        border: '0.5px solid ' + (doneToday ? 'rgba(220,200,80,0.35)' : 'rgba(255,255,255,0.12)'),
+        color: doneToday ? T.accent : T.ink2
+      }} aria-label="Таймер">
+        <svg width="11" height="11" viewBox="0 0 24 24" fill={doneToday ? T.accent : 'none'} stroke={doneToday ? T.accent : T.ink2} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M8 5v14l11-7L8 5z" />
+        </svg>
+        <span style={{
+          fontFamily: 'JetBrains Mono, monospace', fontSize: 11, fontWeight: 500
+        }}>{sec > 0 ? formatDurationRu(sec).replace(' ', '') : '0с'}</span>
+      </button>
+    )
+  }
+
+  return (
+    <button onClick={onOpenNote} style={{
+      width: 32, height: 32, borderRadius: 999,
+      display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+      background: doneToday ? 'rgba(220,200,80,0.15)' : 'rgba(255,255,255,0.05)',
+      border: '0.5px solid ' + (doneToday ? 'rgba(220,200,80,0.35)' : 'rgba(255,255,255,0.12)'),
+      color: doneToday ? T.accent : T.ink2
+    }} aria-label="Заметка">
+      {doneToday ? (
+        <svg width="11" height="9" viewBox="0 0 11 9">
+          <path d="M1 4.5L4 7.5L10 1.5" stroke={T.accent} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+        </svg>
+      ) : (
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M4 19l4-1 11-11-3-3L5 15l-1 4z" />
+        </svg>
+      )}
+    </button>
   )
 }
 
